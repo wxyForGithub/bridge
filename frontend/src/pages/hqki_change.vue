@@ -184,6 +184,7 @@ export default {
         this.address = accounts[0]
         this.getTokenBalance()
       });
+      
     }
   },
   methods: {
@@ -426,9 +427,18 @@ export default {
     },
     // 切换网络
     changeChain(chainId) {
-      const origin = (window.location.origin || '').split('#')[0]
-      const url = origin + '/#/home'
-      this.openNativeReadPaper(url, chainId);
+      if(window.ethereum.isMetaMask) {
+        try{
+          window.ethereum.request({method: 'wallet_switchEthereumChain', params: [{chainId: '0x'+chainId.toString(16)}]})
+        } catch(err) {
+          Toast('请先在metaMask中添加'+chainId+'节点网络')
+        }
+      } else{
+        const origin = (window.location.origin || '').split('#')[0]
+        const url = origin + '/#/home'
+        this.openNativeReadPaper(url, chainId);
+      }
+      
     },
     openNativeReadPaper(url, chainId) {
       let obj = {url}
