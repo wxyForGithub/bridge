@@ -19,7 +19,10 @@ return [
         'decimal' => 'Token精度',
         'sort' => '排序',
         'isNative' => '是否主网币',
-        'limit'=>'审核数额下限'
+        'limit' => '审核数额下限',
+        'isStop' => '停止跨链',
+        'feeMin' => '最小手续费',
+        'feeMax' => '最大手续费',
     ],
     'options' => [
     ],

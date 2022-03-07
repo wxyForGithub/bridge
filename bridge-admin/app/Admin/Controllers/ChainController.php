@@ -23,10 +23,15 @@ class ChainController extends AdminController
             $grid->column('url');
             $grid->column('icon');
             $grid->column('name');
+            $grid->column('status');
+            $grid->column('gwei');
+            $grid->column('manager_gwei');
             $grid->column('sort');
             $grid->column('title');
             $grid->column('bridge');
             $grid->column('bridge_manager');
+            $grid->column('syncNumber');
+            $grid->column('syncLimit');
 
             $grid->filter(function (Grid\Filter $filter) {
                 $filter->equal('id');
@@ -65,13 +70,18 @@ class ChainController extends AdminController
         return Form::make(new Chain(), function (Form $form) {
             $form->display('id');
             $form->text('chainId');
-            $form->image('icon');
+            $form->text('icon');
             $form->text('name');
             $form->text('sort');
             $form->text('title');
             $form->text('url');
+            $form->text('status');
             $form->text('bridge');
             $form->text('bridge_manager');
+            $form->text('gwei');
+            $form->text('manager_gwei');
+            $form->text('syncNumber');
+            $form->text('syncLimit');
         });
     }
 }

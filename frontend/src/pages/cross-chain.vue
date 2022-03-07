@@ -13,7 +13,7 @@
     </div>
     <div class="section flex_h_between_center mt_20" @click="showAssetModel = true">
       <div class="flex1 flex_h_center_start" v-if="token != null">
-        <img :src="token.icon" alt="" class="coin_logo" />
+        <img :src="requireIcon(token.icon,token.fromChain)" alt="" class="coin_logo" />
         <span class="fStyle30_ffffff upper-case">{{token.name}}</span>
       </div>
       <div class="flex1 flex_h_center_start" v-else>
@@ -52,6 +52,13 @@
         <span class="fStyle24_6391DE upper-case">{{receiveAmount}} {{token.name}}</span>
         <div class="link_wrap"><span class="fStyle20_ACB6FF upper-case">{{currNetwork.toChainData.name}}</span></div>
       </div>
+      <div class="alignLeft instruction">
+          <li>跨链资产都会转入另外主网您当前地址({{address}})内，如果没有看到，请添加合约地址。</li>
+          <li>如果要切换跨链兑换的主网，请切换钱包的主网。</li>
+          <li>跨链时间在5分钟-10分钟。</li>
+          <li>更多资产类似请自行申请跨链。</li>
+          <li>本跨链桥为分布式跨链，即将开放跨链节点申请，敬请关注。</li>
+      </div>
     </div>
     <div class="bridge_submit_btn flex_h_center_center" @click="verifySubmit">
       <span class="fStyle32_ffffff">确定兑换</span>
@@ -65,10 +72,11 @@
         </div>
         <div class="list_wrap">
           <div class="flex_h_center_start popup_item" v-for="(item, index) in tokenList" :key="index" @click="setToken(item)">
-            <img :src="item.icon" alt="" class="coin_logo_big" />
+              <img :src="requireIcon(item.icon,item.fromChain)" alt="" class="coin_logo_big" />
             <div class="flex_v_center_start flex1">
               <span class="fStyle28_333333_w5 upper-case">{{item.name}}</span>
               <span class="fStyle22_999999">{{item.title}}</span>
+              <span class="fStyle22_999999">{{shortAddress(item.fromToken,item.isNative)}}</span>
             </div>
             <i class="iconfont icon-select-bold checked" v-if="item.fromToken == token.fromToken"></i>
           </div>
@@ -148,6 +156,7 @@ export default {
       bridgeAddress: '',
       loadingModel: false,
       // loading: false,
+      gweis:{}
     }
   },
   mixins: [asyncUtils, Decimal],
@@ -188,6 +197,22 @@ export default {
     }
   },
   methods: {
+      requireIcon(url, chainId) {
+          if (!url) {
+              url = require(`../assets/icon/${chainId}.png`)
+          }
+          return url
+      },
+    shortAddress(address,isNative){
+        let str = ""
+        if (address === "0x0000000000000000000000000000000000000000"){
+          str = ""
+        }else{
+          str = address.slice(0,12)+"****"+address.slice(-12)
+        }
+      if (isNative) str+=" [ 主网币 ]"
+      return str
+    },
     async init() {
       let customHttpProvider = new ethers.providers.Web3Provider(
         window.ethereum
@@ -229,6 +254,10 @@ export default {
     async getTokenList () {
       let json = await networkApi({chainId: this.chainId})
       if(json.code === 0) {
+
+        // 保存gweis
+        this.gweis = json.gweis
+
         let tempList = []
         for (let i in (json.data || [])){
           let first = (json.data || [])[i].length > 0 ? (json.data || [])[i][0] : []
@@ -236,7 +265,11 @@ export default {
             name: i,
             icon: first ? first.icon : '',
             fromToken: first ? first.fromToken : '',
+            toToken: first?first.toToken:'',
+            fromChain: first?first.fromChain:'',
             title: first ? first.title : '',
+            isNative:first?first.isNative:"",
+            isMain:first?first.isMain:"",
             networks: (json.data || [])[i]
           }
           tempList.push(obj)
@@ -305,7 +338,7 @@ export default {
           this.bridgeAddress,
           approveAmount,
           {
-            gasPrice: ethers.utils.parseUnits(this.min_gasprice, "gwei"),
+            gasPrice: ethers.utils.parseUnits(this.gweis[this.chainId]+"", "gwei"),
           }
         )
       );
@@ -316,7 +349,7 @@ export default {
       let [err, res] = await this.to(
         this.tokenContract.approve(this.bridgeAddress, approveAmount, {
           gasLimit,
-          gasPrice: ethers.utils.parseUnits(this.min_gasprice, "gwei"),
+          gasPrice: ethers.utils.parseUnits(this.gweis[this.chainId]+"", "gwei"),
         })
       );
       if (this.doResponse(err, res)) {
@@ -328,6 +361,7 @@ export default {
     },
     async submit() {
       let amount = this.calcAmount();
+      console.log(amount)
       let minAmount = this.calcWei(this.currNetwork.minValue);
       let maxAmount = this.calcWei(this.currNetwork.maxValue);
       if(Big(amount).lt(Big(minAmount))) {
@@ -367,12 +401,13 @@ export default {
     },
     async exchangeMain() {
       let amount = this.calcAmount();
+      let value = this.currNetwork.isMain ? amount : 0
       const gasLimit = await this.getEstimateGas(() =>
         this.bridgeContract.estimateGas.depositNative(
           this.currNetwork.toChain, this.currNetwork.isMain, amount,
           {
-            value: amount,
-            gasPrice: ethers.utils.parseUnits(this.min_gasprice, "gwei"),
+            value: value,
+            gasPrice: ethers.utils.parseUnits(this.gweis[this.chainId]+"", "gwei"),
           }
         )
       );
@@ -382,8 +417,8 @@ export default {
       }
       let [err, res] = await this.to(this.bridgeContract.depositNative(this.currNetwork.toChain, this.currNetwork.isMain, amount, {
             gasLimit,
-            value: amount,
-            gasPrice: ethers.utils.parseUnits(this.min_gasprice, "gwei"),
+            value: value,
+            gasPrice: ethers.utils.parseUnits(this.gweis[this.chainId]+"", "gwei"),
           }))
           if(this.doResponse(err, res)) {
             this.queryTransation(this.provider, res.hash, async () => {
@@ -391,18 +426,19 @@ export default {
               this.showOrderModel = false
               this.getBalance();
               this.amount = ''
-            }); 
+            });
           } else {
             this.loadingModel = false
           }
     },
     async exchange() {
       let amount = this.calcAmount()
+      console.log(amount)
       const gasLimit = await this.getEstimateGas(() =>
         this.bridgeContract.estimateGas.deposit(
           this.currNetwork.toChain, this.currNetwork.toToken, amount,
           {
-            gasPrice: ethers.utils.parseUnits(this.min_gasprice, "gwei"),
+            gasPrice: ethers.utils.parseUnits(this.gweis[this.chainId]+"", "gwei"),
           }
         )
       );
@@ -412,7 +448,7 @@ export default {
       }
       let [err, res] = await this.to(this.bridgeContract.deposit(this.currNetwork.toChain, this.currNetwork.toToken,  amount, {
         gasLimit,
-        gasPrice: ethers.utils.parseUnits(this.min_gasprice, "gwei"),
+        gasPrice: ethers.utils.parseUnits(this.gweis[this.chainId]+"", "gwei"),
       }))
       if(this.doResponse(err, res)) {
         this.queryTransation(this.provider, res.hash, async () => {
@@ -588,7 +624,7 @@ export default {
       border-radius: 10px;
     }
   }
-  
+
   $fColor_4570B3: #4570B3;
   $fColor_ffffff: #ffffff;
   $fColor_5E81BB: #5E81BB;
@@ -722,7 +758,7 @@ export default {
     margin-top: 25px;
     margin-bottom: 25px;
   }
-  
+
   @font-face {
     font-family: 'iconfont';  /* Project id 2611671 */
     src: url('//at.alicdn.com/t/font_2611671_qucasfx1j2.woff2?t=1623738550612') format('woff2'),
